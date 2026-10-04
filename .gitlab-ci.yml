@@ -1,0 +1,49 @@
+# .gitlab-ci.yml
+# Architecture Pure GitOps - Exécution 100% découplée du poste de travail
+
+stages:
+  - validate
+  - plan
+  - apply
+
+# Utilisation de l'image officielle OpenTofu communautaire et immuable
+image:
+  name: ghcr.io/opentofu/opentofu:1.8.2
+  entrypoint: [""]
+
+# Cache persistant pour accélérer le chargement du provider Proxmox entre les jobs
+cache:
+  key: opentofu-infrastructure
+  paths:
+    - opentofu/.terraform/
+    - opentofu/.terraform.lock.hcl
+
+before_script:
+  - cd opentofu/
+  - tofu init
+
+# 1. ÉTAPE DE VALIDATION SYNTAXIQUE AUTOMATIQUE
+tofu_validate:
+  stage: validate
+  script:
+    - tofu validate
+
+# 2. ÉTAPE DE DRY-RUN (SIMULATION ET VÉRIFICATION DES LOGS)
+tofu_plan:
+  stage: plan
+  script:
+    - tofu plan -out=tfplan
+  artifacts:
+    name: "plan-${CI_COMMIT_SHA}"
+    expire_in: 2 days
+    paths:
+      - opentofu/tfplan
+
+# 3. ÉTAPE DE DÉPLOIEMENT MATÉRIEL (BOUTON MANUEL POUR LE CONTROLE SECOPS)
+tofu_apply:
+  stage: apply
+  script:
+    - tofu apply -auto-approve tfplan
+  dependencies:
+    - tofu_plan
+  when: manual # 🛡️ Règle de production : Nécessite une validation humaine dans l'interface GitLab
