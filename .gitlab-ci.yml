@@ -1,34 +1,35 @@
 # .gitlab-ci.yml
-# Architecture Pure GitOps - Exécution 100% découplée du poste de travail
+# Phase 1 : Provisioning Matériel Pur via OpenTofu & Cloudflare R2 (Sans SSH Proxmox)
 
 stages:
   - validate
   - plan
   - apply
 
-# Utilisation de l'image officielle OpenTofu communautaire et immuable
+# Utilisation de l'image officielle et immuable d'OpenTofu
 image:
   name: ghcr.io/opentofu/opentofu:1.8.2
   entrypoint: [""]
 
-# Cache persistant pour accélérer le chargement du provider Proxmox entre les jobs
+# Cache d'infrastructure pour accélérer l'initialisation du provider Proxmox
 cache:
-  key: opentofu-infrastructure
+  key: opentofu-infrastructure-cache
   paths:
     - opentofu/.terraform/
     - opentofu/.terraform.lock.hcl
 
+# Commandes exécutées automatiquement au début de chaque job
 before_script:
   - cd opentofu/
   - tofu init
 
-# 1. ÉTAPE DE VALIDATION SYNTAXIQUE AUTOMATIQUE
+# 1. ÉTAPE DE VALIDATION SYNTAXIQUE (ZÉRO ERREUR)
 tofu_validate:
   stage: validate
   script:
     - tofu validate
 
-# 2. ÉTAPE DE DRY-RUN (SIMULATION ET VÉRIFICATION DES LOGS)
+# 2. ÉTAPE DE SIMULATION DRY-RUN (VÉRIFICATION DES ACTIONS)
 tofu_plan:
   stage: plan
   script:
@@ -39,11 +40,11 @@ tofu_plan:
     paths:
       - opentofu/tfplan
 
-# 3. ÉTAPE DE DÉPLOIEMENT MATÉRIEL (BOUTON MANUEL POUR LE CONTROLE SECOPS)
+# 3. ÉTAPE DE DÉPLOIEMENT PHYSIQUE (CLIC HUMAIN OBLIGATOIRE)
 tofu_apply:
   stage: apply
   script:
     - tofu apply -auto-approve tfplan
   dependencies:
     - tofu_plan
-  when: manual # 🛡️ Règle de production : Nécessite une validation humaine dans l'interface GitLab
+  when: manual # 🛡️ Règle SecOps : Le déclenchement nécessite une validation humaine dans l'UI

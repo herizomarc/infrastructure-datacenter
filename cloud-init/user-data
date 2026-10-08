@@ -1,0 +1,24 @@
+#cloud-config
+# Configuration de l'environnement linguistique et matériel
+bootcmd:
+  - localectl set-keymap fr
+  - localectl set-x11-keymap fr
+locale: fr_FR.UTF-8
+
+# Extension dynamique de la partition racine (utilise les 40 Go ou 60 Go alloués par OpenTofu)
+growpart:
+  mode: auto
+  devices: ['/']
+  ignore_growroot_disabled: false
+
+# Mise à jour automatique de la base de paquets au boot d'usine
+package_update: true
+
+# 🛡️ STANDARD SECOPS : Création de l'utilisateur d'administration et injection du cadenas SSH
+users:
+  - name: secops
+    groups: wheel
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH91zQ8tAnoHw/k7/IMGv/2+tsAUK3ggbcBEafRJg+Dk gitlab-runner-automation@gitlab.herizor.cloud" # CLÉ PUBLIQUE DE VOTRE RUNNER GITLAB 

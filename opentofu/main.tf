@@ -1,86 +1,66 @@
 # opentofu/main.tf
 
-# 1. GÉNÉRATION DES SNIPPETS CLOUD-INIT INDIVIDUELS (AMORCE AU PREMIER BOOT)
-resource "proxmox_virtual_environment_file" "k8s_cloud_config" {
-  for_each     = var.kubernetes_cluster
-  content_type = "snippets"
-  datastore_id = "local"
-  node_name    = "pve1"
+# LE CONTENU DU DICTIONNAIRE EST FOURNI PAR VOTRE VARIABLES.TF (CONSERVÉ À L'IDENTIQUE)
 
-  # Alignement SecOps avec la syntaxe moderne d'encapsulation de données brutes
-  source_raw {
-    file_name = "${each.key}-init.yaml"
-    data      = <<EOF
-#cloud-config
-bootcmd:
-  - localectl set-keymap fr
-  - localectl set-x11-keymap fr
-locale: fr_FR.UTF-8
-growpart:
-  mode: auto
-  devices: ['/']
-  ignore_growroot_disabled: false
-package_update: true
-EOF
-  }
-}
-
-# 2. PROVISIONNEMENT EN BOUCLE DES 3 VMS RHEL 9.8 D'ENTREPRISE
+# DEPLOYEMENT EN BOUCLE DES 3 VMS À PARTIR DU QCOW2 VIA AMORCE CLOUDFLARE R2
 resource "proxmox_virtual_environment_vm" "k8s_nodes" {
   for_each    = var.kubernetes_cluster
   name        = each.key
-  description = "Instance Kubernetes ${each.value.role} - Deploiement immuable via OpenTofu"
+  description = "Instance Kubernetes ${each.value.role} - Cloud-Init via Cloudflare R2"
   node_name   = "pve1"
   vm_id       = each.value.id
 
-  # Drivers de stockage virtio d'entreprise pour maximiser les IOPS
+  # Caractéristiques matérielles standardisées d'entreprise
   scsi_hardware = "virtio-scsi-pci"
   bios          = "seabios"
 
   cpu {
     cores = each.value.cores
-    type  = "host" # Transmission directe des instructions physiques AES-NI / VT-x
+    type  = "host" # Transmission directe des instructions physiques de l'ASUS SAGE
   }
 
   memory {
     dedicated = each.value.memory
   }
 
+  # Liaison directe avec l'image usine QCOW2 stockée sur l'hyperviseur
   disk {
     datastore_id = "local-lvm"
-    file_id      = "local:iso/rhel-9.8-x86_64-kvm.qcow2" # Votre image d'usine brute Red Hat
+    file_id      = "local:iso/rhel-9.8-x86_64-kvm.qcow2" # Chemin local /var/lib/vz/template/iso/
     interface    = "scsi0"
     size         = each.value.disk_size
   }
 
   agent {
-    enabled = true # Liaison avec le QEMU Guest Agent pour remonter les metriques reseau
+    enabled = true # QEMU Guest Agent indispensable pour la remontée d'IPs dans GitLab
   }
 
-  # Architecture reseau de type VM (Underlay raccordée au pont d'administration)
+  # Architecture réseau raccordée au pont d'administration (VLAN 99)
   network_device {
-    bridge = "vmbr0" # Liaison physique avec le VLAN 99 d'administration
-    model  = "virtio" # Driver paravirtualisé standard pour la performance
+    bridge = "vmbr0"
+    model  = "virtio" # Driver paravirtualisé pour maximiser les performances réseaux
   }
 
+  # 🏆 STANDARD SECOPS : Injection de la source de métadonnées NoCloud dans le numéro de série SMBIOS.
+  # Au premier démarrage, le service Cloud-Init natif de RHEL 9.8 va lire le numéro de série de sa 
+  # propre carte mère et émettre une requête HTTPS vers Cloudflare R2 pour s'auto-configurer.
+  smbios {
+    serial = "ds=nocloud-net;s=https://herizor.cloud"
+  }
+
+  # Déclaration réseau statique transmise à l'API Proxmox
   initialization {
-    datastore_id      = "local-lvm"
-    user_data_file_id = proxmox_virtual_environment_file.k8s_cloud_config[each.key].id
+    datastore_id = "local-lvm"
 
     ip_config {
       ipv4 {
         address = "${each.value.ip}/24"
-        gateway = "10.10.99.1" # Passerelle MikroTik
+        gateway = "10.10.99.1" # Passerelle de votre MikroTik
       }
     }
 
     dns {
-      servers = ["10.10.99.11"] # Resolution interne confiee au DNS
-    }
-
-    user_account {
-      username = "secops"
-      keys     = [var.ssh_public_key] # Injection de la cle SSH lue dynamiquement
+      servers = ["10.10.99.11"] # Résolution interne confiée à votre AdGuard Home
     }
   }
 }
