@@ -1,0 +1,80 @@
+# .gitlab/k8s-ci.yml
+# Version Finale: Provisioning OpenTofu + Bootstrap Ansible (GitOps)
+
+stages:
+  - validate
+  - plan
+  - apply
+  - bootstrap
+
+# Image par défaut pour les étapes d'Infrastructure as Code (OpenTofu)
+image:
+  name: ghcr.io/opentofu/opentofu:1.8.2
+  entrypoint: [""]
+
+# Cache d'infrastructure pour optimiser et accélérer le téléchargement des providers
+cache:
+  key: opentofu-infrastructure-v2
+  paths:
+    - opentofu/.terraform/
+    - opentofu/.terraform.lock.hcl
+
+# COUCHE MATÉRIELLE : OPENTOFU
+
+# validation syntaxique
+tofu_validate:
+  stage: validate
+  before_script:
+    - cd opentofu/
+    - tofu init
+  script:
+    - tofu validate
+
+# simulation Dry-Run (Vérification du plan de construction)
+tofu_plan:
+  stage: plan
+  before_script:
+    - cd opentofu/
+    - tofu init
+  script:
+    - tofu plan -out=tfplan
+  artifacts:
+    name: "plan-${CI_COMMIT_SHA}"
+    expire_in: 2 days
+    paths:
+      - opentofu/tfplan
+
+# déploiement physique sur Proxmox VE (Clic humain obligatoire)
+tofu_apply:
+  stage: apply
+  before_script:
+    - cd opentofu/
+    - tofu init
+  script:
+    - tofu apply -auto-approve tfplan
+  dependencies:
+    - tofu_plan
+  when: manual 
+
+# COUCHE LOGICIELLE : ANSIBLE
+
+# configuration interne et déploiement de containerd
+ansible_bootstrap:
+  stage: bootstrap
+  image: alpine:3.19 # Utilisation d'une image Linux alpine ultra-légère et rapide
+  before_script:
+    # Installation des paquets requis à la volée dans le conteneur du Runner
+    - apk add --no-cache ansible openssh-client
+    
+    # Démarrage de l'agent SSH et injection de clé privée masquée de GitLab
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    
+    # Sécurisation des dossiers SSH du conteneur du Runner
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+  script:
+    - cd ansible/
+    - ansible-playbook -i inventory.ini site.yml # Lancement de l'installation de containerd
+  dependencies:
+    - tofu_apply # S'exécute uniquement si la couche matérielle précédente a réussi

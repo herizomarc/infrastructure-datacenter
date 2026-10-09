@@ -1,0 +1,40 @@
+# .gitlab/vault-ci.yml
+stages:
+  - validate
+  - plan
+  - apply
+
+image:
+  name: ghcr.io/opentofu/opentofu:1.8.2
+  entrypoint: [""]
+
+cache:
+  key: opentofu-vault-cache
+  paths:
+    - opentofu/.terraform/
+
+before_script:
+  - cd opentofu/
+  - tofu init
+
+vault_validate:
+  stage: validate
+  script:
+    - tofu validate
+
+vault_plan:
+  stage: plan
+  script:
+    - tofu plan -target=proxmox_virtual_environment_vm.vault_server -target=proxmox_virtual_environment_file.vault_cloud_init -out=vaultplan
+  artifacts:
+    name: "vault-plan-${CI_COMMIT_SHA}"
+    paths:
+      - opentofu/vaultplan
+
+vault_apply:
+  stage: apply
+  script:
+    - tofu apply -auto-approve vaultplan
+  dependencies:
+    - vault_plan
+  when: manual

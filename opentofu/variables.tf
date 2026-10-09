@@ -1,13 +1,13 @@
 # opentofu/variables.tf
 
-# 1. DÉCLARATION SÉCURISÉE DE LA CLÉ SSH (INJECTÉE DE MANIÈRE DYNAMIQUE PAR GITLAB)
+#DÉCLARATION SÉCURISÉE DE LA CLÉ SSH (INJECTÉE DE MANIÈRE DYNAMIQUE PAR GITLAB)
 variable "ssh_public_key" {
   type        = string
   description = "Clé publique ED25519 d'entreprise lue à la volée depuis le coffre-fort de GitLab"
   # 🛡️ Pas de paramètre 'default' ici : garantit le masquage et l'anonymat complet sur GitHub.
 }
 
-# 2. CARTOGRAPHIE MATÉRIELLE ET ADRESSAGE IP DES NŒUDS DU CLUSTER KUBERNETES
+#CARTOGRAPHIE MATÉRIELLE ET ADRESSAGE IP DES NŒUDS DU CLUSTER KUBERNETES
 variable "kubernetes_cluster" {
   type = map(object({
     id        = number
@@ -47,3 +47,16 @@ variable "kubernetes_cluster" {
     }
   }
 }
+
+# DÉCLARATION SÉCURISÉE DES IDENTIFIANTS RED HAT (INJECTÉS DE MANIÈRE MASQUÉE PAR GITLAB)
+variable "rhel_org_id" {
+  type        = string
+  description = "ID d'organisation Red Hat injecté par GitLab"
+}
+
+variable "rhel_activation_key" {
+  type        = string
+  description = "Clé d'activation Red Hat injectée de manière masquée par GitLab"
+  sensitive   = true # Masque la valeur dans les logs d'exécution OpenTofu
+}
+

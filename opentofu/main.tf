@@ -1,74 +1,101 @@
 # opentofu/main.tf
-# Architecture Certifiée GitOps - Déploiement sans SSH via Clones et Cloudflare R2
+# Template 9000 + Cloud-Init Natif (Zéro SSH, Zéro Internet)
 
+# 🏆 1. OPEN TOFU GÉNÈRE ET TÉLÉVERSE LE SNIPPET VIA L'API WEB (PORT 8006)
+resource "proxmox_virtual_environment_file" "cloud_init_config" {
+  for_each     = var.kubernetes_cluster
+  content_type = "snippets"
+  datastore_id = "local" # Utilise le stockage local que l'on vient d'activer
+  node_name    = "pve1"
+
+  source_raw {
+    # Nom du fichier généré sur Proxmox
+    file_name = "k8s-${each.key}-user-data.yaml"
+    
+    # user-data (directement embarqué dans l'IaC)
+    data = <<EOF
+#cloud-config
+bootcmd:
+  - localectl set-keymap fr
+  - localectl set-x11-keymap fr
+locale: fr_FR.UTF-8
+growpart:
+  mode: auto
+  devices: ['/']
+  ignore_growroot_disabled: false
+package_update: true
+
+# Force l'installation et le démarrage immédiat du QEMU Guest Agent
+packages:
+  - qemu-guest-agent
+runcmd:
+  - [ systemctl, daemon-reload ]
+  - [ systemctl, enable, --now, qemu-guest-agent ]
+
+users:
+  - name: secops
+    groups: wheel
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - "${var.ssh_public_key}" # Injection dynamique de la clé du Runner
+EOF
+  }
+}
+
+# 🚀 2. DÉPLOIEMENT DES VMS PAR CLONAGE DU TEMPLATE 9000
 resource "proxmox_virtual_environment_vm" "k8s_nodes" {
   for_each    = var.kubernetes_cluster
   name        = each.key
-  description = "Instance Kubernetes ${each.value.role} - Deploiement immuable via Template 9000 et Cloudflare R2"
+  description = "Instance Kubernetes ${each.value.role}"
   node_name   = "pve1"
   vm_id       = each.value.id
 
-  # 🏆 LE STANDARD DE PRODUCTION : CLONAGE API EN PORT 8006
-  # Plus aucun flux SSH n'est requis sur l'hyperviseur physique pour manipuler le disque.
   clone {
-    vm_id = 9000 # Pointage sur la Gold Image de référence RHEL 9.8 creee a la main
-    full  = true # Decoupe un clone independant pour maximiser les IOPS et les performances de calcul
+    vm_id = 9000 
+    full  = true 
   }
 
-  # Drivers de stockage et controleurs virtio d'entreprise
   scsi_hardware = "virtio-scsi-pci"
   bios          = "seabios"
 
   cpu {
     cores = each.value.cores
-    type  = "host" # Transmission directe des instructions physiques AES-NI du processeur
+    type  = "host"
   }
 
-  memory {
-    dedicated = each.value.memory
-  }
+  memory { dedicated = each.value.memory }
 
-  # Extension de la partition disque brute heritee du moule d'usine NVMe
   disk {
     datastore_id = "local-lvm"
     interface    = "scsi0"
     size         = each.value.disk_size
   }
 
+  # Activation de l'agent avec l'attente IP active (l'agent va remonter proprement en local)
   agent {
-    enabled = true # QEMU Guest Agent indispensable pour remonter l'etat de sante dans GitLab
-    wait_for_ip {
-      disabled = true 
-    }
-
+    enabled = true
   }
 
-  # Interface reseau raccordee au pont d'administration (VLAN 99)
   network_device {
     bridge = "vmbr0"
-    model  = "virtio" # Driver paravirtualise standard pour la performance reseau
+    model  = "virtio"
   }
 
-  # 🏆 AMORCE EDGE CLOUDFLARE R2 : Injection NoCloud-Net dans la table de la carte mere (SMBIOS)
-  # Au premier démarrage, le service Cloud-Init natif de RHEL 9.8 va lire le numero de serie virtuel
-  # et emettre une requete HTTPS de lecture vers Cloudflare pour s'auto-configurer (AZERTY, user_data).
-  smbios {
-    serial = "ds=nocloud-net;s=https://7a3b6c0841bd27ee9593b930a4be6e7a.r2.cloudflarestorage.com/infrastructure-cloudinit"
-  }
-
-  # Declaration de la couche reseau statique transmise via l'API Proxmox
+  # Association du fichier Cloud-Init à la VM via l'API Proxmox
   initialization {
     datastore_id = "local-lvm"
+    
+    # OpenTofu lie physiquement le snippet généré au lecteur virtuel de la VM
+    user_data_file_id = proxmox_virtual_environment_file.cloud_init_config[each.key].id
 
     ip_config {
       ipv4 {
         address = "${each.value.ip}/24"
-        gateway = "10.10.99.1" # Passerelle de votre routeur MikroTik
+        gateway = "10.10.99.1"
       }
     }
 
-    dns {
-      servers = ["10.10.99.11"] # Resolution interne confiee a votre AdGuard Home
-    }
+    dns { servers = ["10.10.99.11"] }
   }
 }
