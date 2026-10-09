@@ -13,7 +13,7 @@ image:
 
 # Cache d'infrastructure pour accélérer l'initialisation du provider Proxmox
 cache:
-  key: opentofu-infrastructure-cache
+  key: opentofu-infrastructure-cache-v2
   paths:
     - opentofu/.terraform/
     - opentofu/.terraform.lock.hcl
