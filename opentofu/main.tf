@@ -37,6 +37,10 @@ resource "proxmox_virtual_environment_vm" "k8s_nodes" {
 
   agent {
     enabled = true # QEMU Guest Agent indispensable pour remonter l'etat de sante dans GitLab
+    wait_for_ip {
+      disabled = true 
+    }
+
   }
 
   # Interface reseau raccordee au pont d'administration (VLAN 99)
