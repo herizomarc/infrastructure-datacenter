@@ -1,16 +1,19 @@
 # opentofu/vault.tf
-# Déploiement de la VM HashiCorp Vault de Production en VLAN 99
+# Déploiement Souverain de Vault - Standard OpenStack (Config Drive local via API 8006)
 
+# 🏆 resource 1 : OPENTOFU DEMANDE À L'API PROXMOX DE GÉNÉRER L'ISO CLOUD-INIT
+# Transite à 100% par le port HTTPS 8006. Zéro SSH requis sur l'hôte physique.
 resource "proxmox_virtual_environment_file" "vault_cloud_init" {
-  content_type = "snippets"
-  datastore_id = "local"
+  content_type = "iso"       # ◄── Format d'usine pour le Config Drive OpenStack-like
+  datastore_id = "local"     # Stockage de destination pour l'ISO générée
   node_name    = "pve1"
 
   source_raw {
-    file_name = "vault-user-data.yaml"
-    data      = <<EOF
+    file_name = "vault-config-drive.iso"
 
+    data = <<EOF
 #cloud-config
+# Enregistrement officiel automatique auprès du CDN Red Hat au boot
 rh_subscription:
   org: "${var.rhel_org_id}"
   activation-key: "${var.rhel_activation_key}"
@@ -25,14 +28,12 @@ growpart:
   ignore_growroot_disabled: false
 package_update: true
 
-# Installation des paquets requis (GPG et l'Agent Proxmox d'usine)
 packages:
   - gpg
   - wget
   - curl
   - qemu-guest-agent
 
-# SÉQUENCE AUTOMATISÉE D'INSTALLATION SÉCURE DE HASHICORP VAULT SUR RHEL 9
 runcmd:
   - [ systemctl, daemon-reload ]
   - [ systemctl, enable, --now, qemu-guest-agent ]
@@ -61,14 +62,15 @@ users:
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
     shell: /bin/bash
     ssh_authorized_keys:
-      - "${var.ssh_public_key}" # Injection automatique de la clé du Runner
+      - "${var.ssh_public_key}"
 EOF
   }
 }
 
+# 🏆 resource 2 : LA VM CRÉÉE PAR SIMPLE CLONAGE ET LECTURE DE L'ISO LOCAL
 resource "proxmox_virtual_environment_vm" "vault_server" {
   name        = "vm-vault-01"
-  description = "Coffre-fort d'entreprise centralise SecOps - HashiCorp Vault Server"
+  description = "Coffre-fort centralise - HashiCorp Vault en architecture OpenStack Drive"
   node_name   = "pve1"
   vm_id       = 401
 
@@ -85,27 +87,26 @@ resource "proxmox_virtual_environment_vm" "vault_server" {
     type  = "host"
   }
 
-  memory {
-    dedicated = 1024 # 1 Go de RAM dédié pour des performances fluides de l'API Go
-  }
+  memory { dedicated = 1024 }
 
   disk {
     datastore_id = "local-lvm"
     interface    = "scsi0"
-    size         = 20 # 20 Go d'espace NVMe alloués
+    size         = 20
   }
 
-  agent {
-    enabled = true
-  }
+  agent { enabled = true }
 
   network_device {
     bridge = "vmbr0"
     model  = "virtio"
   }
 
+  # 🏆 LIEN DU CONFIG DRIVE NATIF (Méthode OpenStack)
   initialization {
-    datastore_id      = "local-lvm"
+    datastore_id = "local-lvm"
+    
+    # Injection directe de l'ISO générée par OpenTofu dans le lecteur Cloud-Init de la VM
     user_data_file_id = proxmox_virtual_environment_file.vault_cloud_init.id
 
     ip_config {
@@ -114,9 +115,6 @@ resource "proxmox_virtual_environment_vm" "vault_server" {
         gateway = "10.10.99.1"
       }
     }
-
-    dns {
-      servers = ["10.10.99.11"]
-    }
+    dns { servers = ["10.10.99.11"] }
   }
 }
