@@ -45,7 +45,7 @@ resource "proxmox_virtual_environment_vm" "k8s_nodes" {
   # Au premier démarrage, le service Cloud-Init natif de RHEL 9.8 va lire le numéro de série de sa 
   # propre carte mère et émettre une requête HTTPS vers Cloudflare R2 pour s'auto-configurer.
   smbios {
-    serial = "ds=nocloud-net;s=https://herizor.cloud"
+    serial = "ds=nocloud-net;s=https://7a3b6c0841bd27ee9593b930a4be6e7a.r2.cloudflarestorage.com/infrastructure-cloudinit"
   }
 
   # Déclaration réseau statique transmise à l'API Proxmox
