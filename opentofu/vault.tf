@@ -4,12 +4,12 @@
 # 🏆 resource 1 : OPENTOFU DEMANDE À L'API PROXMOX DE GÉNÉRER L'ISO CLOUD-INIT
 # Transite à 100% par le port HTTPS 8006. Zéro SSH requis sur l'hôte physique.
 resource "proxmox_virtual_environment_file" "vault_cloud_init" {
-  content_type = "iso"       # ◄── Format d'usine pour le Config Drive OpenStack-like
+  content_type = "snippets"       # ◄── Format d'usine pour le Config Drive OpenStack-like
   datastore_id = "local"     # Stockage de destination pour l'ISO générée
   node_name    = "pve1"
 
   source_raw {
-    file_name = "vault-config-drive.iso"
+    file_name = "vault-config-drive.yaml"
 
     data = <<EOF
 #cloud-config
