@@ -5,6 +5,7 @@ stages:
   - validate
   - plan
   - apply
+  - destroy
 
 # Utilisation de l'image officielle et immuable d'OpenTofu
 image:
@@ -48,3 +49,12 @@ tofu_apply:
   dependencies:
     - tofu_plan
   when: manual # 🛡️ Règle SecOps : Le déclenchement nécessite une validation humaine dans l'UI
+
+# 4. ÉTAPE DE DÉSTRUCTION PHYSIQUE (CLIC HUMAIN OBLIGATOIRE)
+tofu_destroy:
+  stage: destroy
+  script:
+    - cd opentofu/
+    - tofu init
+    - tofu destroy -auto-approve
+  when: manual # 🛡️ Sécurité : Clic manuel obligatoire pour éviter les accidents

@@ -22,3 +22,12 @@ users:
     shell: /bin/bash
     ssh_authorized_keys:
       - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH91zQ8tAnoHw/k7/IMGv/2+tsAUK3ggbcBEafRJg+Dk gitlab-runner-automation@gitlab.herizor.cloud" # CLÉ PUBLIQUE DE VOTRE RUNNER GITLAB 
+
+packages:
+  - qemu-guest-agent
+
+runcmd:
+  - [ sed, -i, 's/GRUB_TIMEOUT=0/GRUB_TIMEOUT=5/g', /etc/default/grub ]
+  - [ grub2-mkconfig, -o, /boot/grub2/grub.cfg ]
+  - [ systemctl, daemon-reload ]
+  - [ systemctl, enable, --now, qemu-guest-agent ]
