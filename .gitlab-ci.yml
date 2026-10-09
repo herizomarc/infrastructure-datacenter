@@ -1,5 +1,5 @@
 # .gitlab-ci.yml
-# Phase 1 : Provisioning Matériel Pur via OpenTofu & Cloudflare R2 (Sans SSH Proxmox)
+# Version Initiale Corrigée - Provisioning Matériel Pur (Sans collision de dossiers)
 
 stages:
   - validate
@@ -7,30 +7,28 @@ stages:
   - apply
   - destroy
 
-# Utilisation de l'image officielle et immuable d'OpenTofu
 image:
   name: ghcr.io/opentofu/opentofu:1.8.2
   entrypoint: [""]
 
-# Cache d'infrastructure pour accélérer l'initialisation du provider Proxmox
 cache:
-  key: opentofu-infrastructure-cache-v2
+  key: opentofu-infrastructure-v2
   paths:
     - opentofu/.terraform/
     - opentofu/.terraform.lock.hcl
 
-# Commandes exécutées automatiquement au début de chaque job
+# 🏆 CORRECTIF : Le before_script se déplace proprement dans le bon répertoire
 before_script:
   - cd opentofu/
   - tofu init
 
-# 1. ÉTAPE DE VALIDATION SYNTAXIQUE (ZÉRO ERREUR)
+# 1. VALIDE LA SYNTAXE (SANS ERREUR COCHE)
 tofu_validate:
   stage: validate
   script:
     - tofu validate
 
-# 2. ÉTAPE DE SIMULATION DRY-RUN (VÉRIFICATION DES ACTIONS)
+# 2. GÉNÈRE LA SIMULATION DE LA INFRASTRUCTURE
 tofu_plan:
   stage: plan
   script:
@@ -41,20 +39,18 @@ tofu_plan:
     paths:
       - opentofu/tfplan
 
-# 3. ÉTAPE DE DÉPLOIEMENT PHYSIQUE (CLIC HUMAIN OBLIGATOIRE)
+# 3. APPLIQUE LA CRÉATION MATÉRIELLE
 tofu_apply:
   stage: apply
   script:
     - tofu apply -auto-approve tfplan
   dependencies:
     - tofu_plan
-  when: manual # 🛡️ Règle SecOps : Le déclenchement nécessite une validation humaine dans l'UI
+  when: manual
 
-# 4. ÉTAPE DE DÉSTRUCTION PHYSIQUE (CLIC HUMAIN OBLIGATOIRE)
+# 🏆 LE STAGE DE NETTOYAGE MANUEL SI BESOIN DE ROLLBACK
 tofu_destroy:
   stage: destroy
   script:
-    - cd opentofu/
-    - tofu init
     - tofu destroy -auto-approve
-  when: manual # 🛡️ Sécurité : Clic manuel obligatoire pour éviter les accidents
+  when: manual
